@@ -2,15 +2,16 @@ import numpy as np
 from src.activation import*
 from src.initializer import*
 from src.basic import Model
+from src.function import*
 class Linear(Model):
-    def __init__(self,insize,outsize,initmethod='xavier'):
+    def __init__(self,insize,outsize,initmethod='xavier',mode='normal'):
         super().__init__()
         self.params['W']=None
         self.params['b']=None
         self.gradient['W']=None
         self.gradient['b']=None
         self.x=None
-        self.__intweight(insize,outsize,initmethod)
+        self.__intweight(insize,outsize,initmethod,mode)
         self.out=None
     def forward(self,x):
         out=np.dot(x,self.params['W'])+self.params['b']
@@ -23,11 +24,15 @@ class Linear(Model):
         self.gradient['W']=np.dot(self.x.T,dout)
         self.gradient['b']=np.sum(dout,axis=0)
         return dx
-    def __intweight(self,insize,outsize,method):
+    def __intweight(self,insize,outsize,method,mode='normal'):
         if (method=='normal'):
             self.params['W'],self.params['b']=Normal1D(insize,outsize)
+        elif (method=='constant'):
+            self.params['W'],self.params['b']=Constant1D(insize,outsize)
+        elif (method=='kaiming'):
+            self.params['W'],self.params['b']=Kaiming1D(insize,outsize,mode)
         else:
-            self.params['W'],self.params['b']=Xavier1D(insize,outsize)
+            self.params['W'],self.params['b']=Xavier1D(insize,outsize,mode)
 
 class BatchNormalization(Model):
     def __init__(self,insize,momentum=0.9,eps=1e-6):
@@ -119,15 +124,122 @@ class LayerNormalization(Model):
 
 
 class Conv2d(Model):
-    def __init__(self,filter_h,filter_w,stride=1,padding=0):
+    def __init__(self,inchannel,outchannel,filter_h,filter_w,stride=1,padding=0,initmethod='xavier'):
         super().__init__()
         self.filter_h=filter_h
         self.filter_w=filter_w
         self.stride=stride
         self.padding=padding
+        self.inchannel=inchannel
+        self.outchannel=outchannel
+        self.imgCol=None
+        self.params['W']=None
+        self.params['b']=None
+        self.gradient['W']=None
+        self.gradient['b']=None
+        self.__initweight(inchannel,outchannel,filter_h,filter_w,initmethod)
+        self.H=None
+        self.W=None
+        self.C=None
+        self.N=None
     def forward(self,img):
+        N,C,H,W=img.shape
+        img=np.pad(img,((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)))
+        out_h=(H+2*self.padding-self.filter_h)//self.stride+1
+        out_w=(W+2*self.padding-self.filter_w)//self.stride+1
+        imgCol=img2col(img,out_h,out_w,self.filter_h,self.filter_w,self.stride)
+        imgCol=imgCol.reshape((imgCol.shape[0],-1,imgCol.shape[3]))
+        if not self.valid:
+            self.imgCol=imgCol
+            self.N=N
+            self.C=C
+            self.H=img.shape[2]
+            self.W=img.shape[3]
+        #不同通道内容进行拼接
+        output=np.matmul(self.params['W'].reshape((self.params['W'].shape[0],-1)),imgCol)+self.params['b']
+        return output.reshape((output.shape[0],output.shape[1],out_h,out_w))
+    def backward(self,dout):
+        self.gradient['b']=np.sum(dout,axis=(0,2,3)).reshape(-1)
+        x_hat=self.imgCol.transpose(1,2,0).reshape((self.inchannel*self.filter_w*self.filter_h,-1))
+        dout_reshape=dout.transpose(1,2,3,0).reshape((self.outchannel,-1))
+        self.gradient['W']=np.matmul(dout_reshape,x_hat.T).reshape(self.params['W'].shape)
+        dx=np.matmul(self.params['W'].reshape((self.outchannel,-1)).T,dout_reshape)
+        dx=dx.reshape((dx.shape[0],-1,self.N)).transpose(2,0,1)
+        dx=col2img(dx,self.H,self.W,self.filter_h,self.filter_w,self.C,self.padding,self.stride)
+        #print(self.gradient['W'])
+        return dx
 
 
-    def backward(self):
+    def __initweight(self,inchannel,outchannel,filter_h,filter_w,method,mode='normal'):
+        if (method=='normal'):
+            self.params['W'],self.params['b']=Normal2D(inchannel,outchannel,filter_h,filter_w)
+        elif (method=='constant'):
+            self.params['W'],self.params['b']=Constant2D(inchannel,outchannel,filter_h,filter_w)
+        elif (method=='kaiming'):
+            self.params['W'],self.params['b']=Kaiming2D(inchannel,outchannel,filter_h,filter_w,mode)
+        else:
+            self.params['W'],self.params['b']=Xavier2D(inchannel,outchannel,filter_h,filter_w,mode)
 
-    def __initweight(self):
+
+
+
+class Maxpool2D(Model):
+    def __init__(self,filter_shape,padding=0):
+        super().__init__()
+        self.filter_shape=filter_shape
+        self.padding=padding
+        self.output=None
+        self.loc=None
+        self.H=None
+        self.W=None
+    def forward(self,x):
+        N,C,H,W=x.shape
+        x=np.pad(x,((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)))
+        outh=(H+2*self.padding-self.filter_shape)//self.filter_shape+1
+        outw=(W+2*self.padding-self.filter_shape)//self.filter_shape+1
+        imgCol=img2col(x,outh,outw,self.filter_shape,self.filter_shape,self.filter_shape)
+        output=np.max(imgCol,axis=2)
+        if (not self.valid):
+            self.loc=np.argmax(imgCol,axis=2)
+            self.W=x.shape[3]
+            self.H=x.shape[2]
+        return output.reshape((N,C,outh,outw))
+    
+    def backward(self,dout):
+        max_loc = np.zeros((dout.size,self.filter_shape**2))
+        max_loc[np.arange(self.loc.size),self.loc.flatten()]= dout.flatten()
+        max_loc = max_loc.reshape(dout.shape + (self.filter_shape**2,)).transpose(0,1,4,2,3)
+        dcol=max_loc.reshape((max_loc.shape[0],max_loc.shape[1]*max_loc.shape[2],-1))
+        dx=col2img(dcol,self.H,self.W,self.filter_shape,self.filter_shape,dout.shape[1],self.padding,self.filter_shape)
+        return dx
+
+
+
+class Avgpool2D(Model):
+    def __init__(self,filter_shape,padding=0):
+        super().__init__()
+        self.filter_shape=filter_shape
+        self.padding=padding
+        self.output=None
+        self.loc=None
+        self.H=None
+        self.W=None
+    def forward(self,x):
+        N,C,H,W=x.shape
+        x=np.pad(x,((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)))
+        outh=(H+2*self.padding-self.filter_shape)//self.filter_shape+1
+        outw=(W+2*self.padding-self.filter_shape)//self.filter_shape+1
+        imgCol=img2col(x,outh,outw,self.filter_shape,self.filter_shape,self.filter_shape)
+        output=np.mean(imgCol,axis=2)
+        if (not self.valid):
+            self.loc=np.argmax(imgCol,axis=2)
+            self.W=x.shape[3]
+            self.H=x.shape[2]
+        return output.reshape((N,C,outh,outw))
+    
+    def backward(self,dout):
+        avg= np.expand_dims(dout.flatten()/(self.filter_shape**2),1).repeat(self.filter_shape**2,axis=1)
+        avg = avg.reshape(dout.shape + (self.filter_shape**2,)).transpose(0,1,4,2,3)
+        dcol=avg.reshape((avg.shape[0],avg.shape[1]*avg.shape[2],-1))
+        dx=col2img(dcol,self.H,self.W,self.filter_shape,self.filter_shape,dout.shape[1],self.padding,self.filter_shape)
+        return dx
