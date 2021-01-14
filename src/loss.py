@@ -5,12 +5,14 @@ from src.basic import Loss
 class MSELoss(Loss):
     def __init__(self,model,batch_size):
         super().__init__(model,batch_size)
+        self.label_shape=None
     def loss(self,y,label):
         self.y=y
         self.label=label.reshape(y.shape)
-        return np.sum((self.y-self.label)**2)/self.batch_size
+        self.label_shape=self.y.size
+        return np.mean((self.y-self.label)**2)
     def backward(self):
-        dout=2*(self.y-self.label)/self.batch_size
+        dout=2*(self.y-self.label)/self.label_shape
         for l in self.model[::-1]:
             dout=l.backward(dout)
 

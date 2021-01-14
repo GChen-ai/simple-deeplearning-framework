@@ -54,7 +54,7 @@ for epoch in range(1000):
         opt.step()
         #print(batch_x.shape)
         #batch_x=batch_x.reshape(-1)
-        acc_train=np.mean(np.argmax(batch_y, axis=1)==np.argmax(batch_y, axis=1))
+        acc_train=np.mean(np.argmax(batch_x, axis=1)==np.argmax(batch_y, axis=1))
         #print('loss: %.3f  acc: %.3f' %(loss_sum/count,acc_train))
     if epoch%100==0:
         tx=test_x

@@ -35,7 +35,7 @@ class Linear(Model):
             self.params['W'],self.params['b']=Xavier1D(insize,outsize,mode)
 
 class BatchNormalization(Model):
-    def __init__(self,insize,momentum=0.9,eps=1e-6):
+    def __init__(self,insize,momentum=0.9,eps=1e-5):
         super().__init__()
         self.params['beta']=None
         self.params['gamma']=None
@@ -83,7 +83,7 @@ class BatchNormalization(Model):
         self.params['beta']=np.zeros(insize)
 
 class LayerNormalization(Model):
-    def __init__(self,insize,eps=1e-6):
+    def __init__(self,insize,eps=1e-5):
         super().__init__()
         self.params['beta']=None
         self.params['gamma']=None
@@ -250,3 +250,56 @@ class Avgpool2D(Model):
         dcol=avg.reshape((avg.shape[0],avg.shape[1]*avg.shape[2],-1))
         dx=col2img(dcol,self.H,self.W,self.filter_shape,self.filter_shape,dout.shape[1],self.padding,self.filter_shape)
         return dx
+
+
+
+class BatchNormalization2D(Model):
+    def __init__(self,insize,momentum=0.9,eps=1e-5):
+        super().__init__()
+        self.params['beta']=None
+        self.params['gamma']=None
+        self.gradient['beta']=None
+        self.gradient['gamma']=None
+        self.x=None
+        self.xhat=None
+        self.train_mean=0
+        self.train_var=0
+        self.momentum=momentum
+        self.eps=eps
+        self.batch_mean=0
+        self.batch_var=0
+        self.__initweight(insize)
+    def forward(self,x):
+        #训练和测试需要分开,测试时使用的是训练时滑动平均得到的mean和var
+        if (not self.valid):
+            batch_mean=np.mean(x,axis=(0,2,3),keepdims=True)
+            batch_var=np.var(x,axis=(0,2,3),keepdims=True)
+            self.batch_mean=batch_mean
+            self.batch_var=batch_var
+            self.x=x
+            x=(x-batch_mean)/(np.sqrt(batch_var+self.eps))
+            self.xhat=x
+            self.train_mean=self.momentum*self.train_mean+(1-self.momentum)*batch_mean
+            self.train_var=self.momentum*self.train_var+(1-self.momentum)*batch_var
+            out=x*self.params['gamma']+self.params['beta']
+            return out
+        else:
+            return (x-self.train_mean)*self.params['gamma']/(np.sqrt(self.train_var+self.eps))+self.params['beta']
+
+    def backward(self,dout):
+        N,C,H,W=dout.shape
+        self.gradient['beta']=np.sum(dout,axis=(0,2,3),keepdims=True)
+        self.gradient['gamma']=np.sum(dout*self.xhat,axis=(0,2,3),keepdims=True)
+
+        dxhat=self.params['gamma']*dout
+        dvar=np.sum(dxhat*(self.x-self.batch_mean)/(-2*(self.batch_var+self.eps)**1.5),axis=(0,2,3),keepdims=True)
+        #print(dxhat/np.sqrt(self.batch_var+self.eps)+dvar*2*(self.x-self.batch_mean)/dout.size)
+        #print(dvar*2*(self.x-self.batch_mean)/dout.size)
+        I=dxhat/np.sqrt(self.batch_var+self.eps)+dvar*2*(self.x-self.batch_mean)/(N*H*W)
+        dx=I-np.sum(I,axis=(0,2,3),keepdims=True)/(N*H*W)
+        return dx
+
+    def __initweight(self,insize):
+        self.params['gamma']=np.ones((1,insize,1,1))
+        self.params['beta']=np.zeros((1,insize,1,1))
+
