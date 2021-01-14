@@ -9,7 +9,7 @@ y_test=np.eye(10)[y_test]
 y_train=np.eye(10)[y_train]
 max_iter=5000
 batch_size=16
-model=[Conv2d(1,3,3,3,1,1),ReLu(),Maxpool2D(2),Conv2d(3,8,3,3,1,1),ReLu(),Maxpool2D(2),Conv2d(8,10,3,3,1,1),ReLu(),Avgpool2D(7),SoftMax2D()]
+model=[Conv2d(1,3,3,3,1,1),ReLu(),Maxpool2D(2),Conv2d(3,8,3,3,1,1),ReLu(),Maxpool2D(2),Conv2d(8,10,3,3,1,1),ReLu(),Avgpool2D(7),SoftMax()]
 lr=0.03
 opt=SGD(model,lr=lr)
 loss=CrossEntropyLoss(model,batch_size)
