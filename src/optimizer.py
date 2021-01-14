@@ -21,7 +21,7 @@ class SGD(Optimizer):
                 layer.params[key]-=lr*self.v[key+str(i)]
 
 class Adam(Optimizer):
-    def __init__(self,model,batch_size,lr=3e-4,beta1=0.9,beta2=0.999):
+    def __init__(self,model,lr=3e-4,beta1=0.9,beta2=0.999):
         super().__init__(model)
         self.lr=lr
         self.beta1=beta1
