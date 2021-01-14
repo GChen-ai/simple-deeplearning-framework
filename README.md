@@ -22,7 +22,7 @@
 已实现:
 
 1. Linear
-2. BN
+2. BN (1D, 2D)
 3. LN
 4. Conv2d
 5. Maxpool2D
