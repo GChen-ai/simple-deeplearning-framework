@@ -54,6 +54,7 @@ class SoftMax(Model):
         self.out=None
         self.axis=axis
     def forward(self,x):
+        x=x.reshape((x.shape[0],-1))
         max_num=np.max(x,axis=self.axis).reshape(-1,1)
         x=x-max_num
         self.x=x
@@ -85,3 +86,29 @@ class Tanh(Model):
     def backward(self,dout,last=False,label=None):
         if not last:
             return dout*(1-self.out**2)
+
+class SoftMax2D(Model):
+    def __init__(self,axis=1):
+        super().__init__()
+        self.x=None
+        self.out=None
+        self.axis=axis
+    def forward(self,x):
+        x=x.reshape((x.shape[0],-1))
+        max_num=np.max(x,axis=self.axis).reshape(-1,1)
+        x=x-max_num
+        self.x=x
+        exp=np.exp(x)
+        sum_exp=np.sum(exp,axis=self.axis,keepdims=True)
+        out=exp/sum_exp
+        if (not self.valid):
+            self.out=out
+        return out
+    def backward(self,dout,last=False,label=None):
+        if (last):
+            out=dout-label.reshape(dout.shape)
+            return out.reshape((out.shape[0],out.shape[1],1,1))
+        else:
+            E=np.expand_dims(np.eye(dout.shape[1]),0).repeat(dout.shape[0],axis=0)
+            x=np.expand_dims(self.x,2)
+            return np.squeeze(np.matmul((E-x).transpose((0,2,1)),x))

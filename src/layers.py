@@ -142,6 +142,8 @@ class Conv2d(Model):
         self.W=None
         self.C=None
         self.N=None
+        self.outH=None
+        self.outW=None
     def forward(self,img):
         N,C,H,W=img.shape
         img=np.pad(img,((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)))
@@ -155,11 +157,14 @@ class Conv2d(Model):
             self.C=C
             self.H=img.shape[2]
             self.W=img.shape[3]
+            self.outH=out_h
+            self.outW=out_w
         #不同通道内容进行拼接
         output=np.matmul(self.params['W'].reshape((self.params['W'].shape[0],-1)),imgCol)+self.params['b']
         return output.reshape((output.shape[0],output.shape[1],out_h,out_w))
     def backward(self,dout):
-        self.gradient['b']=np.sum(dout,axis=(0,2,3)).reshape(-1)
+        #dout=dout.reshape(self.N,self.outchannel,self.outH,self.outW)
+        self.gradient['b']=np.sum(dout,axis=(0,2,3)).reshape(self.params['b'].shape)
         x_hat=self.imgCol.transpose(1,2,0).reshape((self.inchannel*self.filter_w*self.filter_h,-1))
         dout_reshape=dout.transpose(1,2,3,0).reshape((self.outchannel,-1))
         self.gradient['W']=np.matmul(dout_reshape,x_hat.T).reshape(self.params['W'].shape)
@@ -221,9 +226,10 @@ class Avgpool2D(Model):
         self.filter_shape=filter_shape
         self.padding=padding
         self.output=None
-        self.loc=None
+        self.N=None
         self.H=None
         self.W=None
+        self.C=None
     def forward(self,x):
         N,C,H,W=x.shape
         x=np.pad(x,((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)))
@@ -232,7 +238,8 @@ class Avgpool2D(Model):
         imgCol=img2col(x,outh,outw,self.filter_shape,self.filter_shape,self.filter_shape)
         output=np.mean(imgCol,axis=2)
         if (not self.valid):
-            self.loc=np.argmax(imgCol,axis=2)
+            self.N=N
+            self.C=C
             self.W=x.shape[3]
             self.H=x.shape[2]
         return output.reshape((N,C,outh,outw))
