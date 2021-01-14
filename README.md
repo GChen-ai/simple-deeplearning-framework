@@ -1,5 +1,8 @@
 # Simple Deeplearning Framework
-**一个使用numpy实现的简单的深度学习框架.**
+
+![](https://img.shields.io/badge/Bulid-Passing-brightgreen)![](https://img.shields.io/badge/Powered%20By-Geng%20Chen-brightgreen)
+
+**一个使用numpy实现的简单的深度学习框架.**   [English](README_EN.md)
 
 ## 框架结构
 
