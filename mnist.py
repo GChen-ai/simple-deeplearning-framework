@@ -45,9 +45,8 @@ for i in range(max_iter):
             for l in model:
                 l.val()
                 tx=l.forward(tx)
-            #print(tx)
+            tx=tx.squeeze()
             #print(y_test)
-            #print(np.argmax(tx,axis=1))
             acc+=np.sum(np.argmax(tx,axis=1)==np.argmax(y_test[start:k],axis=1))
             num+=tx.shape[0]
             #acc=np.mean(tx==test_y)
