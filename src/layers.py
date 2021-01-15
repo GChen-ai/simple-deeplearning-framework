@@ -13,16 +13,24 @@ class Linear(Model):
         self.x=None
         self.__intweight(insize,outsize,initmethod,mode)
         self.out=None
+        self.xshape=None
     def forward(self,x):
-        out=np.dot(x,self.params['W'])+self.params['b']
+        newx=x
+        if (len(newx.shape)>2):
+            newx=newx.reshape(x.shape[0],-1)
+            if (not self.valid):
+                self.xshape=x.shape
+        out=np.dot(newx,self.params['W'])+self.params['b']
         if (not self.valid):
-            self.x=x
+            self.x=newx
             self.out=out
         return out
     def backward(self,dout=1):
         dx=np.dot(dout,self.params['W'].T)
         self.gradient['W']=np.dot(self.x.T,dout)
         self.gradient['b']=np.sum(dout,axis=0)
+        if (self.xshape!=None):
+            dx=dx.reshape(self.xshape)
         return dx
     def __intweight(self,insize,outsize,method,mode='normal'):
         if (method=='normal'):
@@ -163,6 +171,8 @@ class Conv2d(Model):
         output=np.matmul(self.params['W'].reshape((self.params['W'].shape[0],-1)),imgCol)+self.params['b']
         return output.reshape((output.shape[0],output.shape[1],out_h,out_w))
     def backward(self,dout):
+        if (len(dout.shape)<=2):
+            dout.reshape((dout.shape[0],-1,self.outH,self.outW))
         #dout=dout.reshape(self.N,self.outchannel,self.outH,self.outW)
         self.gradient['b']=np.sum(dout,axis=(0,2,3)).reshape(self.params['b'].shape)
         x_hat=self.imgCol.transpose(1,2,0).reshape((self.inchannel*self.filter_w*self.filter_h,-1))
@@ -230,6 +240,8 @@ class Avgpool2D(Model):
         self.H=None
         self.W=None
         self.C=None
+        self.outH=None
+        self.outW=None
     def forward(self,x):
         N,C,H,W=x.shape
         x=np.pad(x,((0,0),(0,0),(self.padding,self.padding),(self.padding,self.padding)))
@@ -242,9 +254,13 @@ class Avgpool2D(Model):
             self.C=C
             self.W=x.shape[3]
             self.H=x.shape[2]
+            self.outW=outw
+            self.outH=outh
         return output.reshape((N,C,outh,outw))
     
     def backward(self,dout):
+        if (len(dout.shape)<=2):
+            dout=dout.reshape((dout.shape[0],-1,self.outH,self.outW))
         avg= np.expand_dims(dout.flatten()/(self.filter_shape**2),1).repeat(self.filter_shape**2,axis=1)
         avg = avg.reshape(dout.shape + (self.filter_shape**2,)).transpose(0,1,4,2,3)
         dcol=avg.reshape((avg.shape[0],avg.shape[1]*avg.shape[2],-1))
@@ -287,6 +303,8 @@ class BatchNormalization2D(Model):
             return (x-self.train_mean)*self.params['gamma']/(np.sqrt(self.train_var+self.eps))+self.params['beta']
 
     def backward(self,dout):
+        if (len(dout.shape)<=2):
+            dout=dout.reshape(x.shape)
         N,C,H,W=dout.shape
         self.gradient['beta']=np.sum(dout,axis=(0,2,3),keepdims=True)
         self.gradient['gamma']=np.sum(dout*self.xhat,axis=(0,2,3),keepdims=True)
