@@ -115,6 +115,8 @@ python test.py
 python mnist.py
 ````
 
+结果如图:
 
+![mnist](/media/cg/d29c68c7-e9aa-4b54-97a1-2128070e19fd/PycharmProjects/simple-deeplearning-framework/result.png)
 
 **如在代码和使用中发现了任何问题,希望能在issue中向我指出,非常感谢**
