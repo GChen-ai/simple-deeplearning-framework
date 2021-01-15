@@ -120,6 +120,6 @@ python mnist.py
 
 The result:
 
-![mnist](/media/cg/d29c68c7-e9aa-4b54-97a1-2128070e19fd/PycharmProjects/simple-deeplearning-framework/result.png)
+![mnist](https://github.com/ExpectoPatronumCG/simple-deeplearning-framework/blob/main/result.png)
 
 **If you find any problems in the code, please kindly point them out to me in the issue. Thank you very much **
